@@ -1,6 +1,7 @@
 // Project Identifier: C0F4DFE8B340D81183C208F70F9D2D797908754D
 #include "Database.h"
 #include <limits>
+using namespace std;
 
 void Database::getMode(int argc, char** argv) {
     int choice;
@@ -24,7 +25,7 @@ void Database::getMode(int argc, char** argv) {
                 exit(1);
         }
     }
-}
+} // getMode()
 
 void Database::help() const {
     std::cout << "Usage: ./database [OPTION]...\n"
@@ -34,6 +35,7 @@ void Database::help() const {
 } // help()
 
 // HELPERS:
+
 void Database::showDB() const {
     if (db.empty()) {
         return;
@@ -61,7 +63,7 @@ void Database::showDB() const {
     }
 } // showDB()
 
-bool Database::validate(std::string input, const std::string funcName) {
+bool Database::validate(std::string input, const std::string funcName) const {
     std::string junk;
     if (funcName == "CREATE") {
         if (db.find(input) != db.end()) {
@@ -69,19 +71,15 @@ bool Database::validate(std::string input, const std::string funcName) {
             std::getline(std::cin, junk);
             return false;
         }
-    } 
-    else if (funcName == "REMOVE") {
+    } else if (funcName == "REMOVE") {
         if (db.find(input) == db.end()) {
             std::cout << "Error during REMOVE: Cannot remove " << input << "\n";
             std::getline(std::cin, junk);
             return false;
         }
-    }
-    else if (funcName == "INSERT") {
-        if (db.find(input) == db.end()) {
-            std::cout << "Error during INSERT: " << input << " does not name a table in the database\n";
-            return false;
-        }
+    } else if (db.find(input) == db.end()) {
+        std::cout << "Error during " << funcName << ": " << input << " does not name a table in the database\n";
+        return false;
     }
     return true;
 } // validate()
@@ -117,6 +115,10 @@ void Database::run() {
                     std::cout << "Thanks for being silly! \n";
                     return;
                 }
+                break;
+            }
+            case 'P': {
+                sqlPrint();
                 break;
             }
             case 'S': {
@@ -198,7 +200,7 @@ void Database::sqlInsert() {
     uint32_t numRows;
 
     std::cin >> into >> table >> numRows >> rows;
-    if (!validate(table, "REMOVE")) {
+    if (!validate(table, "INSERT")) {
         return;
     }
 
@@ -236,57 +238,65 @@ void Database::sqlInsert() {
               << " from position " << startIndex << " to " << endIndex << std::endl;
 } // sqlInsert()
 
-void Database::sqlDelete() {
-    std::string from, table, where, colName, op, value;
-    std::cin >> from >> table >> where >> colName >> op >> value;
 
-    if (db.find(table) == db.end()) {
-        std::cout << "Error during DELETE: " << table << " does not name a table in the database\n";
-        return;
-    }
+// Printing
 
-    Table &t = db[table];
-    auto it = std::find(t.colNames.begin(), t.colNames.end(), colName);
-    if (it == t.colNames.end()) {
-        std::cout << "Error during DELETE: " << colName << " does not name a column in " << table << "\n";
-        return;
-    }
 
-    size_t colIndex = static_cast<size_t>(it - t.colNames.begin());
-    ColumnType type = t.colType[colIndex];
-
-    auto satisfies = [&](const Field &f) {
-        if (type == ColumnType::Int) {
-            int cmpVal = std::stoi(value);
-            if (op == "<") return f < Field(cmpVal);
-            if (op == ">") return f > Field(cmpVal);
-            return f == Field(cmpVal);
-        } else if (type == ColumnType::Double) {
-            double cmpVal = std::stod(value);
-            if (op == "<") return f < Field(cmpVal);
-            if (op == ">") return f > Field(cmpVal);
-            return f == Field(cmpVal);
-        } else if (type == ColumnType::Bool) {
-            bool cmpVal = (value == "true");
-            return f == Field(cmpVal);  // only equality comparison makes sense for bool
-        } else if (type == ColumnType::String) {
-            if (op == "<") return f < Field(value);
-            if (op == ">") return f > Field(value);
-            return f == Field(value);
-        }
+bool Database::validateTable(Table& ins, std::vector<std::string> cols) const {
+    if (ins.colNames.empty()) {
+        std::cout << "Empty table LOL." << std::endl;
         return false;
-    };
+    } else {
+        for (const auto &col : cols) {
+            if (find(ins.colNames.begin(), ins.colNames.end(), col) == ins.colNames.end()) {
+                cout << "Error during PRINT: " << col << " does not name a column in table" << endl;
+                return false;
+            }
+        }
+    }
+    return true;
+} // validateTable() const
 
-    size_t before = t.insertCols.size();
-    t.insertCols.erase(
-        std::remove_if(t.insertCols.begin(), t.insertCols.end(),
-            [&](const std::vector<Field> &row) {
-                return satisfies(row[colIndex]);
-            }),
-        t.insertCols.end()
-    );
-    size_t after = t.insertCols.size();
-    size_t deleted = before - after;
+void Database::sqlPrint() {
+    // print func:
+    string token;
+    std::cin >> token;
+    if (token != "FROM") {
+        std::cerr << "Syntax error: expected FROM" << std::endl;
+        return;
+    } //if
 
-    std::cout << "Deleted " << deleted << " rows from " << table << std::endl;
-} // sqlDelete()
+    string table;
+    uint32_t N;
+    std::cin >> table;
+    // helper here,
+    validate(table, "PRINT");
+    std::cin >> N;
+    std::vector<std::string> targets(N);
+    for (std::uint32_t i = 0; i < N; ++i) {
+        std::cin >> targets[i];
+    }
+
+    //column checking.
+    Table &t = db[table];
+    if (!validateTable(t, targets)) {
+        return;
+    }
+    //cout << "Passed.\n";
+
+    string junk;
+    bool stats = false;
+    std::cin >> junk; // WHERE or ALL
+    if (junk == "ALL") {
+        printAll();
+        return;
+    }
+    if (junk == "WHERE") {
+        printWhere();
+        return;
+    }
+    else {
+        std::cerr << "No expected clause in input, try ALL or WHERE.\n";
+        return; 
+    }
+} // sqlPrint()

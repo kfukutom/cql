@@ -40,7 +40,10 @@ friend class Table;
     void help() const;
     bool isQuiet() const { return quiet_mode; }
     void run(); // main()
-    bool validate(std::string input, const std::string funcName);
+
+    // helpers
+    bool validate(std::string input, const std::string funcName) const;
+    bool validateTable(Table& ins, std::vector<std::string> cols) const;
 
     // FOR MY DEBUGGING:
     void showDB() const;
@@ -52,6 +55,11 @@ friend class Table;
     void sqlInsert();
     void sqlDelete();
     void sqlGenerate(std::string ins);
+
+    // Various Prints LOL
+    void sqlPrint();
+    void printAll();
+    void printWhere(); // might need params additional!
 
     // DB:
 }; // class Database
