@@ -20,6 +20,13 @@ public:
     std::vector<ColumnType> colType;
     std::vector<std::string> colNames;
     std::vector<std::vector<Field>> insertCols;
+
+    // bst + hash
+    bool has_hash, has_bst;
+    uint32_t bst_index;
+    uint32_t hash_index;
+    std::map<Field, vector<uint32_t>> bst;
+    std::unordered_map<Field, vector<uint32_t>> hash; 
 }; // class Table
 
 
@@ -50,18 +57,19 @@ friend class Table;
 
     // SQL Commands, let ins be my col name;
     void sqlCreate();
-    void sqlJoin(std::string ins);
+    void sqlJoin();
     void sqlRemove();
     void sqlInsert();
     void sqlDelete();
-    void sqlGenerate(std::string ins);
+    void sqlGenerate();
 
     // Various Prints LOL
     void sqlPrint();
-    void printAll();
-    void printWhere(); // might need params additional!
+    void printAll(Table& t, const string tableName, vector<string>& targets);
+    void printWhere(Table& t, const string& tableName, const vector<string>& targets); // might need params additional!
 
-    // DB:
+    // DB MemAlloc:
+    void cleanup();
 }; // class Database
 
 #endif // DATABASE_HPP
