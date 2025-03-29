@@ -82,8 +82,10 @@ bool Database::validate(std::string input, const std::string funcName) const {
         }
     } else if (funcName == "REMOVE") {
         if (db.find(input) == db.end()) {
-            std::cout << "Error during REMOVE: Cannot remove " << input << "\n";
-            std::getline(std::cin, junk);
+            // FIXED WE ARE GOOD
+            //std::cout << "Error during REMOVE: Cannot remove " << input << "\n";
+            cout << "Error during REMOVE: " << input << " does not name a table in the database\n";
+            getline(std::cin, junk);
             return false;
         }
     } else if (db.find(input) == db.end()) {
@@ -205,14 +207,15 @@ void Database::sqlCreate() {
 } // sqlCreate()
 
 void Database::sqlRemove() {
+    //hella sig fault
     string target;
-    string junk;
     cin >> target;
+
     if (!validate(target, "REMOVE")) {
-        getline(cin, junk);
         return;
     }
-    db.erase(db.find(target));
+
+    db.erase(target);
     std::cout << "Table " << target << " removed\n";
 } // sqlRemove()
 
@@ -225,7 +228,6 @@ void Database::sqlInsert() {
 
     std::cin >> into >> table >> numRows >> rows;
     if (!validate(table, "INSERT")) {
-        getline(cin, junk);
         return;
     }
 
@@ -516,8 +518,142 @@ void Database::sqlGenerate() {
  
 
 void Database::sqlJoin() {
-    // IMPLEMENTATION HERE:
-    std::cout << "Not yet.\n"; 
+    string table1, token, table2;
+    cin >> table1 >> token >> table2;
+    if (!validate(table1, "JOIN") || !validate(table2, "JOIN")) {
+        string trash;
+        getline(cin, trash);
+        return;
+    }
+
+    string where, col1, eq, col2;
+    cin >> where >> col1 >> eq >> col2;
+
+    if (where != "WHERE" || eq != "=") {
+        getline(std::cin, col1);
+        return;
+    }
+
+    Table& t1 = db[table1];
+    Table& t2 = db[table2];
+    uint32_t joinIdx1 = 0, joinIdx2 = 0;
+    bool found1 = false, found2 = false;
+
+    for (uint32_t i = 0; i < t1.colNames.size(); ++i) {
+        if (t1.colNames[i] == col1) {
+            joinIdx1 = i;
+            found1 = true;
+            break;
+        }
+    }
+    for (uint32_t i = 0; i < t2.colNames.size(); ++i) {
+        if (t2.colNames[i] == col2) {
+            joinIdx2 = i;
+            found2 = true;
+            break;
+        }
+    }
+
+    string trasht1;
+    // various flags for JOIN call(s):
+    if (!found1) {
+        getline(cin, trasht1);
+        cout << "Error during JOIN: " << col1 << " does not name a column in " << table1 << '\n';
+        return;
+    }
+    if (!found2) {
+        getline(cin, trasht1);
+        cout << "Error during JOIN: " << col2 << " does not name a column in " << table2 << '\n';
+        return;
+    }
+
+    string and_print, print;
+    uint32_t n;
+    cin >> and_print >> print >> n;
+    if (and_print != "AND" || print != "PRINT") {
+        string trash;
+        getline(std::cin, trash);
+        return;
+    }
+
+    vector<pair<bool, uint32_t>> printCols(n);
+    for (uint32_t i = 0; i < n; ++i) {
+        string col;
+        uint32_t fromTable;
+        cin >> col >> fromTable;
+
+        if (fromTable == 1) {
+            bool found = false;
+            for (uint32_t j = 0; j < t1.colNames.size(); ++j) {
+                if (t1.colNames[j] == col) {
+                    printCols[i] = {true, j};
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                cout << "Error during JOIN: " << col << " does not name a column in " << table1 << '\n';
+                getline(cin, col);
+                return;
+            }
+        } else if (fromTable == 2) {
+            bool found = false;
+            for (uint32_t j = 0; j < t2.colNames.size(); ++j) {
+                if (t2.colNames[j] == col) {
+                    printCols[i] = {false, j};
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                cout << "Error during JOIN: " << col << " does not name a column in " << table2 << '\n';
+                return;
+            }
+        } else {
+            cout << "Error: invalid table number " << fromTable << "\n";
+            return;
+        }
+    }
+
+    if (!quiet_mode) {
+        for (uint32_t i = 0; i < n; ++i) {
+            if (printCols[i].first) {
+                cout << t1.colNames[printCols[i].second] << " ";
+            } else {
+                cout << t2.colNames[printCols[i].second] << " ";
+            }
+        }
+        cout << '\n';
+    }
+
+    unordered_map<Field, vector<uint32_t>> t2hash;
+    for (uint32_t i = 0; i < t2.insertCols.size(); ++i) {
+        t2hash[t2.insertCols[i][joinIdx2]].push_back(i);
+    }
+
+    uint32_t count = 0;
+    for (uint32_t i = 0; i < t1.insertCols.size(); ++i) {
+        const Field& key = t1.insertCols[i][joinIdx1];
+        if (t2hash.find(key) != t2hash.end()) {
+            const auto& matched = t2hash[key];
+            for (uint32_t r = 0; r < matched.size(); ++r) {
+                if (!quiet_mode) {
+                    for (uint32_t j = 0; j < n; ++j) {
+                        if (printCols[j].first) {
+                            cout << t1.insertCols[i][printCols[j].second] << " ";
+                        } else {
+        //                   cout << t2.insertCols[matched[0]][printCols[1].second] << '\n';
+                            cout << t2.insertCols[matched[r]][printCols[j].second] << " ";
+                        }
+                    }
+                    cout << '\n';
+                }
+                count++;
+            }
+        }
+    } //for()
+    cout << "Printed " << count << " rows from joining " 
+        << table1 << " to " << table2 << '\n';
 } // sqlJoin()
 
 

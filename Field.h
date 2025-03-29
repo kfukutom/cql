@@ -15,7 +15,6 @@
 // The type contained within a Field; you can use this also.
 enum class ColumnType : uint8_t { String, Double, Int, Bool };
 
-
 class Field {
   public:
   /* Field can be constructed out of a string, an int, a double, or a bool.
