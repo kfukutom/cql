@@ -1,0 +1,18 @@
+CREATE db1 3 int string string col1 col2 col3
+INSERT INTO db1 10 ROWS
+1 eecs183 Intro
+2 eecs280 Data
+3 eecs281 Structs
+4 eecs485 WebSystems
+5 eecs484 Database
+6 eecs482 OS
+7 eecs442 CV
+8 eecs481 SWE
+9 eecs388 Security
+10 eecs398 SpecialTopics
+DELETE FROM db1 WHERE col1 > 5
+DELETE FROM db1 WHERE col3 = Security
+GENERATE FOR db1 bst INDEX ON col1
+REMOVE db1
+REMOVE db1
+QUIT
