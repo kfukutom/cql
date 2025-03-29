@@ -128,7 +128,7 @@ void Database::run() {
                 break;
             }
             case 'J': { // join
-                std::cout << "JOIN is not implemented yet.\n";
+                sqlJoin();
                 break;
             }
             case 'D': {
@@ -197,7 +197,7 @@ void Database::sqlCreate() {
         std::cin >> db[table].colNames[i];
     }
 
-    std::cout << "New table " << table << " with column(s): ";
+    std::cout << "New table " << table << " with column(s) ";
     for (const auto &name : db[table].colNames) {
         std::cout << name << " ";
     }
@@ -368,7 +368,8 @@ void Database::printWhere(Table& t, const string& tableName, const vector<string
     string val;
     cin >> colName >> op >> val;
 
-    // Validate WHERE column
+
+    // COLUMN CHECKING HERE,
     auto it = find(t.colNames.begin(), t.colNames.end(), colName);
     if (it == t.colNames.end()) {
         cout << "Error during PRINT: " << colName << " does not name a column in " << tableName << '\n';
@@ -376,8 +377,83 @@ void Database::printWhere(Table& t, const string& tableName, const vector<string
         getline(cin, junk);
         return;
     }
-    std::cout << targets.at(0);
+
+    uint32_t targetIdx = static_cast<uint32_t>(it - t.colNames.begin());
+    Field entry = [&]() {
+        switch (t.colType[targetIdx]) {
+            case ColumnType::Int:
+                return Field(stoi(val));
+            case ColumnType::Double:
+                return Field(stod(val));
+            case ColumnType::Bool:
+                return Field(val == "true");
+            case ColumnType::String:
+                return Field(val);
+        }
+        return Field(0);
+    }();
+
+    vector<uint32_t> targetIndices;
+    for (const auto& name : targets) {
+        auto targetIt = find(t.colNames.begin(), t.colNames.end(), name);
+        if (targetIt == t.colNames.end()) {
+            cout << "Error during PRINT: " << name << " does not name a column in table\n";
+            string junk;
+            getline(cin, junk);
+            return;
+        }
+        targetIndices.push_back(static_cast<uint32_t>(targetIt - t.colNames.begin()));
+    }
+
+    if (!quiet_mode) {
+        for (const auto& name : targets) {
+            cout << name << " ";
+        }
+        cout << '\n';
+    } // if()
+
+    uint32_t matchCount = 0;
+    // lambda function from LAB
+    auto matches = [&](const Field& f) {
+        if (op == '>') return f > entry;
+        else if (op == '<') return f < entry;
+        else if (op == '=') return f == entry;
+        return false;
+    };
+
+    // USE BST HERE
+    if (!t.bst.empty() && t.bst_index == targetIdx) {
+        for (const auto& [key, indices] : t.bst) {
+            if (!matches(key)) continue;
+            for (auto rowIdx : indices) {
+                //const auto& cols = t.insertNames[rowIdx];
+                const auto& row = t.insertCols[rowIdx];
+                if (!quiet_mode) {
+                    for (auto idx : targetIndices) {
+                        cout << row[idx] << " ";
+                    }
+                    cout << '\n';
+                }
+                matchCount++;
+            }
+        }
+    } else { // case for hash
+        for (const auto& row : t.insertCols) {
+            if (matches(row[targetIdx])) {
+                if (!quiet_mode) {
+                    for (auto idx : targetIndices) {
+                        cout << row[idx] << " ";
+                    }
+                    cout << '\n';
+                }
+                matchCount++;
+            }
+        }
+    }
+
+    cout << "Printed " << matchCount << " matching rows from " << tableName << '\n';
 } // printWhere()
+
 
 void Database::sqlGenerate() {
     string junk, tableName, indexType, col;
@@ -387,17 +463,19 @@ void Database::sqlGenerate() {
         return;
     }
 
-    cin >> tableName;
-    cin >> indexType;
-    cin >> junk;
+    cin >> tableName >> indexType >> junk;
+
+    // miscs:
     cin >> junk;
     cin >> col;
 
-    if (db.find(tableName) == db.end()) {
-        cout << "Error during GENERATE: " << tableName << " does not name a table in the database\n";
+    if (!validate(tableName, "GENERATE")) {
+        string trash;
+        getline(cin, trash);
         return;
     }
 
+    // COLUMN CHECKING FINALIZED:
     Table &t = db[tableName];
     if (find(t.colNames.begin(), t.colNames.end(), col) == t.colNames.end()) {
         cout << "Error during GENERATE: " << col << " does not name a column in " << tableName << '\n';
@@ -439,38 +517,37 @@ void Database::sqlGenerate() {
 
 void Database::sqlJoin() {
     // IMPLEMENTATION HERE:
+    std::cout << "Not yet.\n"; 
 } // sqlJoin()
 
 
 void Database::sqlDelete() {
     string token;
-    string trash; // junk collection
+    string trash;
     cin >> token;
     if (token != "FROM") {
+        cout << "Syntax error: expected FROM\n";
         getline(cin, trash);
-        cout << "Syntax error: expected FROM" << endl;
         return;
     }
     string tableName;
     cin >> tableName;
-    if (!validate(tableName, "DELETE")) {
+    if (!validate(tableName,"DELETE")) {
         getline(cin, trash);
         return;
     }
-    
     string whereToken;
     cin >> whereToken;
     if (whereToken != "WHERE") {
         getline(cin, trash);
-        cout << "Syntax error: expected WHERE" << endl;
+        cout << "Syntax error: expected WHERE\n";
         return;
     }
     string colname;
     cin >> colname;
     Table &T = db[tableName];
     if (find(T.colNames.begin(), T.colNames.end(), colname) == T.colNames.end()) {
-        cout << "Error during DELETE: " << colname << " does not name a column in " << tableName << endl;
-        string trash;
+        cout << "Error during DELETE: " << colname << " does not name a column in " << tableName << '\n';
         getline(cin, trash);
         return;
     }
@@ -480,12 +557,18 @@ void Database::sqlDelete() {
     }
     char op;
     string value;
-    cin >> op;
-    cin >> value;
-    Field entry(value);
+    cin >> op >> value;
 
-    // prior size is saved + comparators from Comparators.h
-    // refer to COMPARATORS.H
+    // FIXED THIS:
+    Field entry = [&]() {
+        switch (T.colType[colIndex]) {
+            case ColumnType::Int: return Field(stoi(value));
+            case ColumnType::Double: return Field(stod(value));
+            case ColumnType::Bool: return Field(value == "true");
+            case ColumnType::String: return Field(value);
+        }
+        return Field(0);
+    }();
     uint32_t before = static_cast<uint32_t>(T.insertCols.size());
     switch (op) {
     case '>':
@@ -504,22 +587,21 @@ void Database::sqlDelete() {
             compare_equal(colIndex, entry)), T.insertCols.end());
         break;
     default:
-        string garb;
-        getline(cin, garb);
-        //cout << "Invalid Syntax\n";
+        getline(cin, trash);
         return;
     }
-
     if (!T.bst.empty()) {
         T.bst.clear();
         for (uint32_t j = 0; j < T.insertCols.size(); j++) {
             T.bst[T.insertCols[j][T.bst_index]].push_back(j);
-        } // for()
+        }
     }
-    cout << "Deleted " << (before - T.insertCols.size()) << " rows from " << tableName << endl;
+    cout << "Deleted " << (before - T.insertCols.size()) << " rows from " << tableName << '\n';
 } //sqlDelete(), complete no more memory leaks.
 
+
 // ------------------------------------ DATABASE MISC. ------------------------------------
+
 
 void Database::cleanup() {
     string tb_name;
