@@ -521,8 +521,6 @@ void Database::sqlJoin() {
     string table1, token, table2;
     cin >> table1 >> token >> table2;
     if (!validate(table1, "JOIN") || !validate(table2, "JOIN")) {
-        string trash;
-        getline(cin, trash);
         return;
     }
 
@@ -557,12 +555,16 @@ void Database::sqlJoin() {
     string trasht1;
     // various flags for JOIN call(s):
     if (!found1) {
-        getline(cin, trasht1);
+        string trash;
+        getline(cin, trash);
+        //cout << "Here!.";
         cout << "Error during JOIN: " << col1 << " does not name a column in " << table1 << '\n';
         return;
     }
     if (!found2) {
-        getline(cin, trasht1);
+        string trash;
+        getline(cin, trash);
+        //cout << "Here!.";
         cout << "Error during JOIN: " << col2 << " does not name a column in " << table2 << '\n';
         return;
     }
@@ -657,6 +659,7 @@ void Database::sqlJoin() {
 } // sqlJoin()
 
 
+// consider using stl to delete
 void Database::sqlDelete() {
     string token;
     string trash;
@@ -666,36 +669,38 @@ void Database::sqlDelete() {
         getline(cin, trash);
         return;
     }
+
     string tableName;
     cin >> tableName;
-    if (!validate(tableName,"DELETE")) {
+    if (!validate(tableName, "DELETE")) {
         getline(cin, trash);
         return;
     }
+
     string whereToken;
     cin >> whereToken;
     if (whereToken != "WHERE") {
-        getline(cin, trash);
         cout << "Syntax error: expected WHERE\n";
+        getline(cin, trash);
         return;
     }
+
     string colname;
     cin >> colname;
-    Table &T = db[tableName];
-    if (find(T.colNames.begin(), T.colNames.end(), colname) == T.colNames.end()) {
+    Table& T = db[tableName];
+
+    auto it = find(T.colNames.begin(), T.colNames.end(), colname);
+    if (it == T.colNames.end()) {
         cout << "Error during DELETE: " << colname << " does not name a column in " << tableName << '\n';
         getline(cin, trash);
         return;
     }
-    uint32_t colIndex = 0;
-    while (T.colNames[colIndex] != colname) {
-        colIndex++;
-    }
+    uint32_t colIndex = static_cast<uint32_t>(it - T.colNames.begin());
+
     char op;
     string value;
     cin >> op >> value;
 
-    // FIXED THIS:
     Field entry = [&]() {
         switch (T.colType[colIndex]) {
             case ColumnType::Int: return Field(stoi(value));
@@ -703,37 +708,44 @@ void Database::sqlDelete() {
             case ColumnType::Bool: return Field(value == "true");
             case ColumnType::String: return Field(value);
         }
-        return Field(0);
+        return Field(0); // fallback
     }();
+
     uint32_t before = static_cast<uint32_t>(T.insertCols.size());
+
+    // lambda function from LAB
     switch (op) {
-    case '>':
-        T.insertCols.erase(remove_if(
-            T.insertCols.begin(), T.insertCols.end(),
-            compare_greater(colIndex, entry)), T.insertCols.end());
-        break;
-    case '<':
-        T.insertCols.erase(remove_if(
-            T.insertCols.begin(), T.insertCols.end(),
-            compare_less(colIndex, entry)), T.insertCols.end());
-        break;
-    case '=':
-        T.insertCols.erase(remove_if(
-            T.insertCols.begin(), T.insertCols.end(),
-            compare_equal(colIndex, entry)), T.insertCols.end());
-        break;
-    default:
-        getline(cin, trash);
-        return;
+        case '>':
+            T.insertCols.erase(
+                remove_if(T.insertCols.begin(), T.insertCols.end(),
+                          compare_greater(colIndex, entry)),
+                T.insertCols.end());
+            break;
+        case '<':
+            T.insertCols.erase(
+                remove_if(T.insertCols.begin(), T.insertCols.end(),
+                          compare_less(colIndex, entry)),
+                T.insertCols.end());
+            break;
+        case '=':
+            T.insertCols.erase(
+                remove_if(T.insertCols.begin(), T.insertCols.end(),
+                          compare_equal(colIndex, entry)),
+                T.insertCols.end());
+            break;
+        default:
+            getline(cin, trash);
+            return;
     }
+
     if (!T.bst.empty()) {
         T.bst.clear();
-        for (uint32_t j = 0; j < T.insertCols.size(); j++) {
+        for (uint32_t j = 0; j < T.insertCols.size(); ++j) {
             T.bst[T.insertCols[j][T.bst_index]].push_back(j);
         }
     }
     cout << "Deleted " << (before - T.insertCols.size()) << " rows from " << tableName << '\n';
-} //sqlDelete(), complete no more memory leaks.
+} // sqlDelete(), no mem leak
 
 
 // ------------------------------------ DATABASE MISC. ------------------------------------
