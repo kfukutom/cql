@@ -1,0 +1,20 @@
+# Hello World
+CREATE players 5 int string string int string ID First_Name Last_Name Age Position
+INSERT INTO players 5 ROWS
+1 Paolo Banchero 22 Forward
+2 Franz Wagner 23 Forward
+3 Jalen Suggs 24 Guard
+4 Cole Anthony 25 Guard
+5 Wendell Carter_Jr. 26 Center
+INSERT INTO players 5 ROWS
+6 Jonathan Issac 27 Forward
+7 Anthony Black 21 Guard
+8 Corey Joseph 31 Guard
+9 Caleb Houstan 22 Forward
+10 Moe Wagner 27 Center
+GENERATE FOR players bst INDEX ON Age
+PRINT FROM players 3 First_Name Last_Name Position WHERE Age > 25
+PRINT FROM players 5 ID First_Name Last_Name Age Position ALL
+REMOVE players
+# QUIT
+QUIT
