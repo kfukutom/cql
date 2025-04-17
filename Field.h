@@ -1,8 +1,3 @@
-// Project Identifier: C0F4DFE8B340D81183C208F70F9D2D797908754D
-
-// EECS 281 Project 3 SillyQL Field class
-// Copyright 2025, Regents of the University of Michigan
-
 #pragma once
 
 #include <utility>
