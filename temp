@@ -1,0 +1,86 @@
+import dask.dataframe as dd
+import dask_geopandas as dgpd
+import geopandas as gpd
+from datetime import datetime
+from dask.distributed import Client, LocalCluster
+import os
+import glob
+
+# Start Dask client
+print(f"Starting intersection filtering at: {datetime.now()}")
+cluster = LocalCluster(n_workers=3, threads_per_worker=4, memory_limit='24GB')
+client = Client(cluster)
+print(f"Dask dashboard available at: {client.dashboard_link}")
+
+try:
+    # Load intersection shapefile and buffer it by 400m
+    print("Loading intersection shapefile and buffering...")
+    intersection_points = gpd.read_file("path_to_intersection_points.shp")  # replace with your actual file
+    intersection_points = intersection_points.to_crs(epsg=32617)  # reproject to meters for buffering
+    buffered_intersections = intersection_points.buffer(400)
+    intersection_buffered_gdf = gpd.GeoDataFrame(geometry=buffered_intersections, crs="EPSG:32617").to_crs(epsg=4326)
+
+    # Convert to Dask GeoDataFrame
+    polygon_ddf = dgpd.from_geopandas(intersection_buffered_gdf, npartitions=1)
+
+    # I/O paths
+    input_folder = r"D:\Large_datasets\data\data_by_h3"
+    output_folder = os.path.join(input_folder, "intersection_parquet")
+    os.makedirs(output_folder, exist_ok=True)
+
+    relevant_ids = [
+        '8644a9767ffffff', '8644a90d7ffffff', '8644a90c7ffffff',
+        '8644a90e7ffffff', '8644a900fffffff', '8644a9057ffffff'
+    ]
+    parquet_files = [os.path.join(input_folder, f"{fid}.parquet") for fid in relevant_ids]
+
+    for parquet_path in parquet_files:
+        try:
+            filename = os.path.basename(parquet_path)
+            file_id = os.path.splitext(filename)[0]
+            print(f"\nProcessing file: {filename} at {datetime.now()}")
+
+            # Read parquet as Dask DataFrame
+            ddf = dd.read_parquet(parquet_path, blocksize="64MB")
+
+            # Bounding box pre-filter
+            minx, miny, maxx, maxy = intersection_buffered_gdf.total_bounds
+            ddf = ddf[
+                (ddf["longitude"] >= minx) & (ddf["longitude"] <= maxx) &
+                (ddf["latitude"] >= miny) & (ddf["latitude"] <= maxy)
+            ]
+
+            # Convert to Dask GeoDataFrame
+            dgdf = ddf.map_partitions(
+                lambda df: gpd.GeoDataFrame(
+                    df,
+                    geometry=gpd.points_from_xy(df['longitude'], df['latitude']),
+                    crs="EPSG:4326"
+                )
+            )
+            dgdf = dgpd.from_dask_dataframe(dgdf)
+
+            # Spatial join
+            joined = dgpd.sjoin(dgdf, polygon_ddf, predicate="within")
+
+            if 'index_right' in joined.columns:
+                joined = joined.drop(columns='index_right')
+
+            # Save result
+            output_path = os.path.join(output_folder, f"intersection_{file_id}.parquet")
+            print(f"Writing to: {output_path}")
+            joined.compute().to_parquet(output_path, index=False, compression="snappy")
+
+        except Exception as file_err:
+            print(f"Error processing {filename}: {file_err}")
+
+    print(f"\nIntersection filtering complete at: {datetime.now()}")
+
+except Exception as e:
+    print(f"Top-level error: {e}")
+    raise
+
+finally:
+    print("Cleaning up Dask client...")
+    client.close()
+    cluster.close()
